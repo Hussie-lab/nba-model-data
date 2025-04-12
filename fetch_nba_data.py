@@ -18,7 +18,7 @@ def get_teams():
 
 def get_games_by_season(season):
     games = []
-    page = 0
+    page = 1
     while True:
         url = f"https://api-nba-v1.p.rapidapi.com/games?season={season}&league=standard&page={page}"
         res = requests.get(url, headers=HEADERS)
