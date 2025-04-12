@@ -8,13 +8,8 @@ HEADERS = {
     "X-RapidAPI-Host": "api-nba-v1.p.rapidapi.com"
 }
 
-SEASONS = [2021, 2022, 2023, 2024, 2025]
+SEASONS = [2022, 2023, 2024]
 RATE_LIMIT_DELAY = 1.2
-
-def get_teams():
-    url = "https://api-nba-v1.p.rapidapi.com/teams"
-    res = requests.get(url, headers=HEADERS)
-    return {t["id"]: t["name"] for t in res.json()["response"] if t["nbaFranchise"]}
 
 def get_games_by_season(season):
     games = []
@@ -22,6 +17,9 @@ def get_games_by_season(season):
     while True:
         url = f"https://api-nba-v1.p.rapidapi.com/games?season={season}&league=standard&page={page}"
         res = requests.get(url, headers=HEADERS)
+        if res.status_code != 200:
+            print(f"❌ API error {res.status_code}: {res.text}")
+            break
         batch = res.json().get("response", [])
         if not batch:
             break
@@ -33,6 +31,8 @@ def get_games_by_season(season):
 def get_player_stats(game_id):
     url = f"https://api-nba-v1.p.rapidapi.com/players/statistics?game={game_id}"
     res = requests.get(url, headers=HEADERS)
+    if res.status_code != 200:
+        print(f"❌ Stats error for game {game_id}: {res.status_code} - {res.text}")
     return res.json().get("response", [])
 
 def main():
@@ -88,12 +88,13 @@ def main():
             time.sleep(RATE_LIMIT_DELAY)
 
     if all_games:
-        pd.DataFrame(all_games).to_csv("nba_games_2021_2025.csv", index=False)
+        pd.DataFrame(all_games).to_csv("nba_games_2022_2024.csv", index=False)
     if all_player_stats:
-        pd.DataFrame(all_player_stats).to_csv("nba_player_stats_2021_2025.csv", index=False)
+        pd.DataFrame(all_player_stats).to_csv("nba_player_stats_2022_2024.csv", index=False)
 
     print("✅ Done. CSVs saved.")
 
 if __name__ == "__main__":
     main()
+
 
