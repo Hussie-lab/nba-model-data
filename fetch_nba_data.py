@@ -22,8 +22,9 @@ def get_games_by_season(season):
     while True:
         url = f"https://api-nba-v1.p.rapidapi.com/games?season={season}&league=standard&page={page}"
         res = requests.get(url, headers=HEADERS)
-        batch = res.json()["response"]
-        if not batch: break
+        batch = res.json().get("response", [])
+        if not batch:
+            break
         games.extend(batch)
         page += 1
         time.sleep(RATE_LIMIT_DELAY)
@@ -32,55 +33,67 @@ def get_games_by_season(season):
 def get_player_stats(game_id):
     url = f"https://api-nba-v1.p.rapidapi.com/players/statistics?game={game_id}"
     res = requests.get(url, headers=HEADERS)
-    return res.json()["response"]
+    return res.json().get("response", [])
 
-games_data = []
-player_data = []
+def main():
+    all_games = []
+    all_player_stats = []
 
-teams = get_teams()
-time.sleep(RATE_LIMIT_DELAY)
+    for season in SEASONS:
+        print(f"📅 Season {season}")
+        games = get_games_by_season(season)
 
-for season in SEASONS:
-    print(f"📅 Season {season}")
-    games = get_games_by_season(season)
-    
-    for game in games:
-        if not game["scores"]["home"]["points"] or not game["scores"]["visitors"]["points"]:
-            continue
+        for game in games:
+            game_id = game.get("id")
+            if not game_id:
+                continue
+            player_stats = get_player_stats(game_id)
+            if not player_stats:
+                continue
 
-        g = {
-            "season": season,
-            "date": game["date"]["start"][:10],
-            "home_team": game["teams"]["home"]["name"],
-            "away_team": game["teams"]["visitors"]["name"],
-            "home_score": game["scores"]["home"]["points"],
-            "away_score": game["scores"]["visitors"]["points"],
-            "total_points": game["scores"]["home"]["points"] + game["scores"]["visitors"]["points"]
-        }
-        games_data.append(g)
-
-        stats = get_player_stats(game["id"])
-        for p in stats:
-            player = {
-                "game_id": game["id"],
+            game_record = {
                 "season": season,
-                "team": p["team"]["name"],
-                "player": f"{p['player']['firstname']} {p['player']['lastname']}",
-                "points": p["points"],
-                "rebounds": p["totReb"],
-                "assists": p["assists"],
-                "minutes": p["min"],
-                "fgp": p["fgp"],
-                "tpp": p["tpp"],
-                "ftp": p["ftp"],
-                "plus_minus": p["plusMinus"]
+                "id": game_id,
+                "date": game["date"]["start"],
+                "home_team": game["teams"]["home"]["name"],
+                "away_team": game["teams"]["visitors"]["name"],
+                "home_score": game["scores"]["home"]["points"],
+                "away_score": game["scores"]["visitors"]["points"],
+                "total_points": (
+                    game["scores"]["home"]["points"] + game["scores"]["visitors"]["points"]
+                    if game["scores"]["home"]["points"] is not None and game["scores"]["visitors"]["points"] is not None else None
+                )
             }
-            player_data.append(player)
+            all_games.append(game_record)
 
-        time.sleep(RATE_LIMIT_DELAY)
+            for player in player_stats:
+                stat = player.get("statistics", {})
+                player_record = {
+                    "game_id": game_id,
+                    "team": player.get("team", {}).get("name"),
+                    "player": f"{player.get('player', {}).get('firstname', '')} {player.get('player', {}).get('lastname', '')}",
+                    "points": stat.get("points"),
+                    "rebounds": stat.get("totReb"),
+                    "assists": stat.get("assists"),
+                    "blocks": stat.get("blocks"),
+                    "steals": stat.get("steals"),
+                    "turnovers": stat.get("turnovers"),
+                    "minutes": stat.get("min"),
+                    "fg_pct": stat.get("fgp"),
+                    "fg3_pct": stat.get("tpp"),
+                    "ft_pct": stat.get("ftp"),
+                }
+                all_player_stats.append(player_record)
 
-# Save as CSV
-pd.DataFrame(games_data).to_csv("nba_games_2021_2025.csv", index=False)
-pd.DataFrame(player_data).to_csv("nba_player_stats_2021_2025.csv", index=False)
+            time.sleep(RATE_LIMIT_DELAY)
 
-print("✅ Done. CSVs saved.")
+    if all_games:
+        pd.DataFrame(all_games).to_csv("nba_games_2021_2025.csv", index=False)
+    if all_player_stats:
+        pd.DataFrame(all_player_stats).to_csv("nba_player_stats_2021_2025.csv", index=False)
+
+    print("✅ Done. CSVs saved.")
+
+if __name__ == "__main__":
+    main()
+
